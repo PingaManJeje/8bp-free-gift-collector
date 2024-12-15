@@ -27,7 +27,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git config --global user.email "this.is.aditeya@gmail.com"
+          git config --global user.email "krzzlpzz@gmail.com"
           git config --global user.name "GH Action"
           git add .
           DATE=$(date +'%m.%d')
