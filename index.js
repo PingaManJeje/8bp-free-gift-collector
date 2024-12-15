@@ -30,7 +30,7 @@ const getArchivedFileName = (date) => {
 };
 
 const URL = "https://8ballpool.com/en/shop";
-const USER_UNIQUE_ID = "4722012226";
+const USER_UNIQUE_ID = "4572143551";
 const DELAY = 100;
 
 const collectRewards = async () => {
