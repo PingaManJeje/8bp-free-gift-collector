@@ -1,210 +1,120 @@
 import puppeteer from "puppeteer";
-import fs from "fs/promises";
 
-const logMessage = (type, message) => {
-  const colors = {
-    success: "\x1b[32m",
-    error: "\x1b[31m",
-    info: "\x1b[36m",
-    warning: "\x1b[33m",
-    reset: "\x1b[0m",
-  };
-  const color = colors[type] || colors.info;
-  console.log(`${color}%s${colors.reset}`, message, "\n");
-};
+import { logger } from "./logger.js";
+import { makeRewardData } from "./utils.js";
 
-const URL = "https://8ballpool.com/en/shop";
-const DELAY = 150;
+/**
+ *
+ * @param {string} userUniqueID
+ * @returns {string[]}
+ *
+ */
+export const collectRewards = async (userUniqueID) => {
+  const pageUrl = "https://8ballpool.com/en/shop";
+  const delay = 100;
+  const BROWSER_ARGS = ["--no-sandbox", "--disable-setuid-sandbox"];
+  const TIMEOUT = 15000;
 
-const collectFreeRewards = async () => {
+  logger("debug", "🚀 Launching browser...");
   const browser = await puppeteer.launch({
-    headless: "new",
-    slowMo: DELAY,
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-blink-features=AutomationControlled",
-      "--disable-web-security",
-      "--disable-features=VizDisplayCompositor",
-      "--disable-dev-shm-usage",
-      "--disable-accelerated-2d-canvas",
-      "--no-first-run",
-      "--no-zygote",
-      "--single-process",
-      "--disable-gpu",
-    ],
+    headless: true,
+    slowMo: delay,
+    args: BROWSER_ARGS,
   });
-
   const page = await browser.newPage();
-
   await page.setUserAgent(
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.0.0 Safari/537.36"
   );
 
-  // Evitar detección de automatización
-  await page.evaluateOnNewDocument(() => {
-    Object.defineProperty(navigator, "webdriver", {
-      get: () => undefined,
+  logger("info", `🌐 Navigating to ${pageUrl}`);
+  await page.goto(pageUrl, { waitUntil: "networkidle2" });
+  logger("debug", `✅ Navigation complete, waiting for login button.`);
+
+  const LOGIN_SELECTOR = 'xpath//html/body/div[1]/div/div[1]/div/div[2]/header/div[3]/div/button[1]';
+  logger("debug", `⏳ Waiting for selector: ${LOGIN_SELECTOR} (Timeout: ${TIMEOUT}ms)`);
+  
+  const loginButton = await page.waitForSelector(
+    LOGIN_SELECTOR,
+    { visible: true, timeout: TIMEOUT }
+  );
+
+  if (loginButton) {
+    logger("debug", "🔍 Login button found, clicking.");
+    await loginButton.click();
+    
+    // Campo de Input
+    const INPUT_ID_SELECTOR = 'xpath//html/body/div[1]/div/div[2]/div/div[2]/div/div/div/div/form/div[2]/div[1]/input';
+    logger("debug", `⏳ Waiting for input selector: ${INPUT_ID_SELECTOR} (Timeout: ${TIMEOUT}ms)`);
+    
+    await page.waitForSelector(INPUT_ID_SELECTOR, { visible: true, timeout: TIMEOUT });
+    
+    await page.type(INPUT_ID_SELECTOR, userUniqueID, {
+      delay,
     });
-    Object.defineProperty(navigator, "plugins", {
-      get: () => [1, 2, 3, 4, 5],
-    });
-    Object.defineProperty(navigator, "languages", {
-      get: () => ["en-US", "en"],
-    });
-  });
-
-  await page.setViewport({ width: 1366, height: 768 });
-
-  logMessage("info", `🌐 Navegando a ${URL}`);
-
-  try {
-    await page.goto(URL, { waitUntil: "domcontentloaded", timeout: 60000 });
-    await new Promise((r) => setTimeout(r, 3000));
-
-    await page.screenshot({ path: "debug-start.png", fullPage: true });
-    await fs.writeFile("debug-start.html", await page.content());
-    logMessage("info", "📸 Debug guardado: debug-start.png / debug-start.html");
-
-    await waitForStoreLoad(page);
-    const rewards = await findFreeRewards(page);
-
-    await browser.close();
-    logMessage("info", "❎ Navegador cerrado correctamente.");
-
-    return rewards;
-  } catch (error) {
-    logMessage("error", `❌ Error en ejecución: ${error.message}`);
-
-    try {
-      await page.screenshot({ path: "debug-error.png", fullPage: true });
-      await fs.writeFile("debug-error.html", await page.content());
-      logMessage("info", "📸 Debug de error guardado");
-    } catch (e) {}
-
-    await browser.close();
-    throw error;
-  }
-};
-
-const waitForStoreLoad = async (page) => {
-  logMessage("info", "⏳ Esperando a que cargue la tienda...");
-
-  const storeSelectors = [
-    ".product-list-item",
-    ".product",
-    "[class*='product']",
-    ".item",
-    ".shop-item",
-  ];
-
-  let storeLoaded = false;
-
-  for (const selector of storeSelectors) {
-    try {
-      await page.waitForSelector(selector, { timeout: 10000 });
-      const elements = await page.$$(selector);
-      if (elements.length > 0) {
-        logMessage("success", `✅ Tienda cargada con selector: ${selector}`);
-        storeLoaded = true;
-        break;
-      }
-    } catch (e) {
-      continue;
-    }
-  }
-
-  if (!storeLoaded) {
-    logMessage("warning", "⚠️ No se encontraron elementos, esperando más tiempo...");
-    await new Promise((r) => setTimeout(r, 5000));
-  }
-
-  await new Promise((r) => setTimeout(r, 2000));
-};
-
-const findFreeRewards = async (page) => {
-  const productSelectors = [
-    ".product-list-item",
-    ".product",
-    "[class*='product']",
-    ".item",
-    ".shop-item",
-  ];
-
-  let products = [];
-
-  // Buscar productos
-  for (const selector of productSelectors) {
-    try {
-      products = await page.$$(selector);
-      if (products.length > 0) {
-        logMessage("info", `🔎 ${products.length} productos encontrados con ${selector}`);
-        break;
-      }
-    } catch (e) {
-      continue;
-    }
-  }
-
-  if (products.length === 0) {
-    logMessage("warning", "⚠️ No se encontraron productos en la página.");
-    return [];
-  }
-
-  const freeItems = [];
-
-  for (let i = 0; i < products.length; i++) {
-    const product = products[i];
-    try {
-      const priceElement = await product.$(
-        "button, .price-button, [class*='price'], .buy-button"
-      );
-      if (!priceElement) continue;
-
-      const priceText = await page.evaluate(
-        (el) => el.textContent?.trim()?.toUpperCase() || "",
-        priceElement
-      );
-
-      if (priceText.includes("FREE")) {
-        const nameElement = await product.$("h3, .name, [class*='name'], .title");
-        const imageElement = await product.$("img");
-
-        const name = nameElement
-          ? await nameElement.evaluate((el) => el.textContent.trim())
-          : `Producto ${i + 1}`;
-        const img = imageElement
-          ? await imageElement.evaluate((el) => el.src)
-          : "";
-
-        freeItems.push({ name, img, price: priceText });
-        logMessage("success", `🎁 ${name} — ${priceText}`);
-      }
-    } catch (err) {
-      logMessage("warning", `⚠️ Error en producto ${i + 1}: ${err.message}`);
-      continue;
-    }
-  }
-
-  if (freeItems.length === 0) {
-    logMessage("info", "🧩 No se encontraron productos FREE esta vez.");
+    
+    // ATUALIZADO: Usando o novo XPath absoluto para o botão "Go"
+    const GO_SELECTOR = 'xpath//html/body/div[1]/div/div[2]/div/div[2]/div/div/div/div/form/div[2]/div[2]/button';
+    logger("debug", `⏳ Waiting for selector: ${GO_SELECTOR}`);
+    
+    const goButton = await page.waitForSelector(
+      GO_SELECTOR,
+      { visible: true, timeout: TIMEOUT }
+    );
+    await goButton.click();
+    logger("success", "✅ User logged in.");
   } else {
-    logMessage("info", `🎯 Total FREE encontrados: ${freeItems.length}`);
-    // Guardar resultados en JSON
-    await fs.writeFile("free-rewards.json", JSON.stringify(freeItems, null, 2));
-    logMessage("success", "💾 Archivo guardado: free-rewards.json");
+    logger("error", "❌ Login button not found.");
+    throw new Error("Unable to login.");
   }
 
-  return freeItems;
+  let rewards = [];
+  const PRODUCTS_SELECTOR = ".product-list-item";
+  logger("debug", `🔍 Searching for products with selector: ${PRODUCTS_SELECTOR}`);
+  const products = await page.$$(PRODUCTS_SELECTOR);
+  const N = products.length;
+
+  logger("info", `💡 ${N} products found.`);
+
+  for (const [index, product] of products.entries()) {
+    logger("debug", `➡️ Processing product [${index + 1}/${N}]`);
+    
+    const priceButton = await product.$("button");
+    const price = await priceButton.evaluate((el) =>
+      el.textContent.trim().toUpperCase()
+    );
+
+    const imageElement = await product.$("img");
+    const imageSrc = await imageElement.evaluate((i) => i.getAttribute("src"));
+
+    const nameElement = await product.$("h3");
+    const name = await nameElement.evaluate((el) => el.textContent.trim());
+
+    const quantityElement = await product.$(".amount-text");
+
+    let quantity = "";
+    if (quantityElement) {
+      quantity = await quantityElement.evaluate((el) => el.textContent.trim());
+    }
+
+    logger("info", `🚲 [${index + 1}/${N}] ${price} ${name}`);
+
+    if (price.toUpperCase() === "FREE" || price.toUpperCase() === "CLAIMED") {
+      logger("info", `⏳ Claiming: [${index + 1}/${N}]`);
+      await priceButton.click();
+      rewards.push(makeRewardData(imageSrc, name, quantity));
+      logger("success", `🎉 Claimed: [${index + 1}/${N}]`);
+    } else {
+      logger("debug", `💰 Product [${index + 1}/${N}] skipped. Price: ${price}`);
+    }
+  }
+
+  await browser.close();
+  logger("info", "❎ Browser closed.");
+
+  if (rewards.length === 0) {
+    logger("warn", "⚠️ No free rewards found.");
+    throw new Error("No rewards found");
+  }
+
+  return rewards;
 };
-
-// EJECUCIÓN PRINCIPAL
-(async () => {
-  try {
-    logMessage("info", "🚀 Iniciando búsqueda de productos FREE...");
-    const rewards = await collectFreeRewards();
-    logMessage("success", `🤖 Proceso completado: ${rewards.length} productos FREE encontrados.`);
-  } catch (error) {
-    logMessage("error", `💥 Falló la ejecución: ${error.message}`);
-  }
-})();
