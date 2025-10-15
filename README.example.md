@@ -12,8 +12,13 @@
     </p>
   </div>
   <p align="center">
-    <a href="https://github.com/aditeyaS/8bp-free-gift-collector/tree/main/archive" aria-label="View previous rewards">
-        <img src="https://img.shields.io/badge/View_previous_rewards-8A2BE2?style=for-the-badge"/>
+    <a href="SETUP.md" aria-label="View previous rewards">
+        <img src="https://img.shields.io/badge/Deploy_your_script-ff0000?style=for-the-badge&logo=probot&logoColor=ffffff&logoSize=auto"/>
+    </a>
+  </p>
+  <p align="center">
+    <a href="archive" aria-label="View previous rewards">
+      View previous rewards
     </a>
   </p>
 </p>
