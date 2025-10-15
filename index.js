@@ -83,8 +83,8 @@ const collectRewards = async () => {
       timeout: 60000 
     });
     
-    // ✅ CORREGIDO: Usar page.waitForTimeout
-    await page.waitForTimeout(3000);
+    
+    await new Promise(r => setTimeout(r, 3000));
 
     // Debug files
     await page.screenshot({ path: 'debug-start.png', fullPage: true });
@@ -207,8 +207,7 @@ const attemptLogin = async (page) => {
     await loginButton.click();
     logMessage("info", `🔐 Clicked login button with selector: ${usedSelector}`);
 
-    // ✅ CORREGIDO: Usar page.waitForTimeout
-    await page.waitForTimeout(2000);
+await new Promise(r => setTimeout(r, 2000));
 
     const idSelectors = [
       'input[data-testid="input-unique-id"]',
@@ -254,8 +253,7 @@ const attemptLogin = async (page) => {
 
     if (confirmButton) {
       await confirmButton.click();
-      // ✅ CORREGIDO: Usar page.waitForTimeout
-      await page.waitForTimeout(3000);
+      await new Promise(r => setTimeout(r, 3000));
       logMessage("success", "✅ Login attempt completed");
     }
 
@@ -293,7 +291,7 @@ const waitForStoreLoad = async (page) => {
   if (!storeLoaded) {
     // ✅ CORREGIDO: Intentar cargar más tiempo
     logMessage("warning", "⚠️ Store selectors not found, waiting longer...");
-    await page.waitForTimeout(5000);
+    await new Promise(r => setTimeout(r, 5000));
     
     // Verificar si hay algún contenido
     const bodyContent = await page.evaluate(() => document.body.innerText);
@@ -302,8 +300,7 @@ const waitForStoreLoad = async (page) => {
     }
   }
 
-  // ✅ CORREGIDO: Usar page.waitForTimeout
-  await page.waitForTimeout(2000);
+  await new Promise(r => setTimeout(r, 2000));
 };
 
 const claimFreeRewards = async (page) => {
@@ -360,8 +357,7 @@ const claimFreeRewards = async (page) => {
       
       if (priceText?.includes("FREE") || priceText === "0" || priceText === "") {
         await priceButton.click();
-        // ✅ CORREGIDO: Usar page.waitForTimeout
-        await page.waitForTimeout(1000);
+        await new Promise(r => setTimeout(r, 1000));
 
         const imageElement = await product.$("img");
         const nameElement = await product.$("h3, .name, [class*='name'], .title");
