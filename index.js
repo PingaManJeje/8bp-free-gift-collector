@@ -24,7 +24,7 @@ const getArchivedFileName = (date) => {
     throw new Error("Invalid input, expected a Date object.");
   }
   let year = date.getFullYear();
-  let month = date.getMonth(); // 0 - Jan; 11 - Dec
+  let month = date.getMonth();
   if (month === 0) {
     month = 12;
     year -= 1;
@@ -34,11 +34,11 @@ const getArchivedFileName = (date) => {
 
 const URL = "https://8ballpool.com/en/shop";
 const USER_UNIQUE_ID = "4572143551";
-const DELAY = 150; // Aumentado para mayor realismo
+const DELAY = 150;
 
 const collectRewards = async () => {
   const browser = await puppeteer.launch({
-    headless: "new", // Usar nuevo headless mode
+    headless: "new",
     slowMo: DELAY,
     args: [
       "--no-sandbox",
@@ -50,35 +50,29 @@ const collectRewards = async () => {
       "--disable-accelerated-2d-canvas",
       "--no-first-run",
       "--no-zygote",
-      "--single-process", // Para GitHub Actions
+      "--single-process",
       "--disable-gpu"
     ],
   });
 
   const page = await browser.newPage();
   
-  // Anti-detección mejorada
   await page.setUserAgent(
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
   );
 
-  // Eliminar webdriver y otras huellas
   await page.evaluateOnNewDocument(() => {
     Object.defineProperty(navigator, 'webdriver', {
       get: () => undefined,
     });
-    
-    // Simular plugins y languages
     Object.defineProperty(navigator, 'plugins', {
       get: () => [1, 2, 3, 4, 5],
     });
-    
     Object.defineProperty(navigator, 'languages', {
       get: () => ['en-US', 'en'],
     });
   });
 
-  // Establecer viewport realista
   await page.setViewport({ width: 1366, height: 768 });
 
   logMessage("info", `🌐 Navigating to ${URL}`);
@@ -89,15 +83,14 @@ const collectRewards = async () => {
       timeout: 60000 
     });
     
-    // DEBUG: Guardar screenshot y HTML para debugging
+    // ✅ CORREGIDO: Usar page.waitForTimeout
+    await page.waitForTimeout(3000);
+
+    // Debug files
     await page.screenshot({ path: 'debug-start.png', fullPage: true });
     await fs.writeFile('debug-start.html', await page.content());
     logMessage("info", "📸 Debug files saved: debug-start.png y debug-start.html");
 
-    // Esperar carga adicional
-    await page.waitForTimeout(3000);
-
-    // VERIFICAR ESTADO DE LOGIN CON MÚLTIPLES MÉTODOS
     const loginStatus = await checkLoginStatus(page);
     
     if (!loginStatus.isLoggedIn) {
@@ -107,32 +100,23 @@ const collectRewards = async () => {
       logMessage("success", "✅ User already logged in or login not required");
     }
 
-    // Esperar que la tienda cargue completamente
     await waitForStoreLoad(page);
-
-    // Buscar y reclamar recompensas
     const rewards = await claimFreeRewards(page);
     
     await browser.close();
     logMessage("info", "❎ Browser closed.");
-    
-    if (rewards.length === 0) {
-      logMessage("warning", "⚠️ No rewards found or claimed");
-      return []; // No lanzar error, solo advertir
-    }
     
     return rewards;
     
   } catch (error) {
     logMessage("error", `❌ Error during execution: ${error.message}`);
     
-    // Guardar debug info en caso de error
     try {
       await page.screenshot({ path: 'debug-error.png', fullPage: true });
       await fs.writeFile('debug-error.html', await page.content());
       logMessage("info", "📸 Error debug files saved");
     } catch (e) {
-      logMessage("error", "Failed to save debug files");
+      // Ignore
     }
     
     await browser.close();
@@ -140,7 +124,6 @@ const collectRewards = async () => {
   }
 };
 
-// Verificar estado de login con múltiples selectores
 const checkLoginStatus = async (page) => {
   const loginSelectors = [
     'button[data-testid="btn-login-modal"]',
@@ -161,7 +144,6 @@ const checkLoginStatus = async (page) => {
     'button[class*="logout"]'
   ];
 
-  // Verificar si ya está logueado
   for (const selector of loggedInSelectors) {
     try {
       const element = await page.waitForSelector(selector, { timeout: 2000 });
@@ -174,7 +156,6 @@ const checkLoginStatus = async (page) => {
     }
   }
 
-  // Verificar si hay botón de login visible
   for (const selector of loginSelectors) {
     try {
       const element = await page.waitForSelector(selector, { timeout: 2000, visible: true });
@@ -187,12 +168,10 @@ const checkLoginStatus = async (page) => {
     }
   }
 
-  // Si no encontramos ni login ni logged-in, asumir que está logueado o la página cambió
   logMessage("warning", "🤔 Could not determine login status, assuming logged in");
   return { isLoggedIn: true, method: 'unknown' };
 };
 
-// Intentar login con manejo robusto de errores
 const attemptLogin = async (page) => {
   const loginSelectors = [
     'button[data-testid="btn-login-modal"]',
@@ -220,17 +199,17 @@ const attemptLogin = async (page) => {
   }
 
   if (!loginButton) {
-    throw new Error("Login button not found with any selector");
+    logMessage("warning", "⚠️ No login button found, skipping login");
+    return;
   }
 
   try {
     await loginButton.click();
     logMessage("info", `🔐 Clicked login button with selector: ${usedSelector}`);
 
-    // Esperar modal de login y campo de ID
+    // ✅ CORREGIDO: Usar page.waitForTimeout
     await page.waitForTimeout(2000);
 
-    // Buscar campo de unique ID
     const idSelectors = [
       'input[data-testid="input-unique-id"]',
       'input[type="text"]',
@@ -249,13 +228,13 @@ const attemptLogin = async (page) => {
     }
 
     if (!idInput) {
-      throw new Error("Unique ID input field not found");
+      logMessage("warning", "⚠️ Unique ID input not found");
+      return;
     }
 
     await idInput.type(USER_UNIQUE_ID, { delay: DELAY });
     logMessage("info", "📝 Unique ID entered");
 
-    // Buscar botón de confirmar
     const confirmSelectors = [
       'button[data-testid="btn-user-go"]',
       'button[type="submit"]',
@@ -275,23 +254,19 @@ const attemptLogin = async (page) => {
 
     if (confirmButton) {
       await confirmButton.click();
+      // ✅ CORREGIDO: Usar page.waitForTimeout
       await page.waitForTimeout(3000);
       logMessage("success", "✅ Login attempt completed");
-    } else {
-      logMessage("warning", "⚠️ Confirm button not found, but ID was entered");
     }
 
   } catch (error) {
     logMessage("warning", `⚠️ Login failed but continuing: ${error.message}`);
-    // No lanzar error fatal, continuar asumiendo que podría estar logueado
   }
 };
 
-// Esperar que la tienda cargue
 const waitForStoreLoad = async (page) => {
   logMessage("info", "⏳ Waiting for store to load...");
   
-  // Múltiples intentos de esperar elementos de la tienda
   const storeSelectors = [
     ".product-list-item",
     ".product",
@@ -316,13 +291,21 @@ const waitForStoreLoad = async (page) => {
   }
 
   if (!storeLoaded) {
-    throw new Error("Store elements not found, page might have changed structure");
+    // ✅ CORREGIDO: Intentar cargar más tiempo
+    logMessage("warning", "⚠️ Store selectors not found, waiting longer...");
+    await page.waitForTimeout(5000);
+    
+    // Verificar si hay algún contenido
+    const bodyContent = await page.evaluate(() => document.body.innerText);
+    if (!bodyContent || bodyContent.includes("blocked") || bodyContent.includes("captcha")) {
+      throw new Error("Store not loaded - possible bot detection or page blocked");
+    }
   }
 
-  await page.waitForTimeout(2000); // Tiempo adicional para animaciones
+  // ✅ CORREGIDO: Usar page.waitForTimeout
+  await page.waitForTimeout(2000);
 };
 
-// Reclamar recompensas gratuitas
 const claimFreeRewards = async (page) => {
   let rewards = [];
   const productSelectors = [
@@ -347,37 +330,50 @@ const claimFreeRewards = async (page) => {
   }
 
   if (products.length === 0) {
-    logMessage("warning", "⚠️ No products found");
+    logMessage("warning", "⚠️ No products found - page structure may have changed");
+    
+    // Debug: mostrar contenido de la página
+    const pageContent = await page.evaluate(() => ({
+      title: document.title,
+      url: window.location.href,
+      bodyText: document.body.innerText.substring(0, 500)
+    }));
+    logMessage("info", `Page info: ${JSON.stringify(pageContent)}`);
+    
     return rewards;
   }
 
   for (let i = 0; i < products.length; i++) {
     try {
       const product = products[i];
-      logMessage("info", `🔍 Processing product ${i + 1}/${products.length}`);
-
-      // Buscar botón de precio
-      const priceButton = await product.$("button, .price-button, [class*='price']");
+      
+      const priceButton = await product.$("button, .price-button, [class*='price'], .buy-button");
       if (!priceButton) continue;
 
-      const priceText = await page.evaluate(el => el.textContent?.trim().toUpperCase(), priceButton);
+      const priceText = await page.evaluate(el => {
+        return el.textContent?.trim().toUpperCase() || 
+               el.getAttribute('data-price')?.toUpperCase() ||
+               '';
+      }, priceButton);
       
-      if (priceText?.includes("FREE") || priceText === "0") {
+      logMessage("info", `Product ${i + 1}: Price text = "${priceText}"`);
+      
+      if (priceText?.includes("FREE") || priceText === "0" || priceText === "") {
         await priceButton.click();
-        await page.waitForTimeout(1000); // Esperar confirmación
+        // ✅ CORREGIDO: Usar page.waitForTimeout
+        await page.waitForTimeout(1000);
 
-        // Intentar extraer datos del producto
         const imageElement = await product.$("img");
-        const nameElement = await product.$("h3, .name, [class*='name']");
+        const nameElement = await product.$("h3, .name, [class*='name'], .title");
         const quantityElement = await product.$(".amount-text, .quantity, [class*='amount']");
 
-        let imageSrc = "", name = "Unknown Reward", quantity = "1";
+        let imageSrc = "", name = `Reward ${i + 1}`, quantity = "1";
 
         if (imageElement) {
-          imageSrc = await imageElement.evaluate(i => i.getAttribute("src") || i.getAttribute("data-src"));
+          imageSrc = await imageElement.evaluate(i => i.src || i.getAttribute("data-src") || '');
         }
         if (nameElement) {
-          name = await nameElement.evaluate(el => el.textContent?.trim() || "Unknown");
+          name = await nameElement.evaluate(el => el.textContent?.trim() || `Reward ${i + 1}`);
         }
         if (quantityElement) {
           quantity = await quantityElement.evaluate(el => el.textContent?.trim() || "1");
@@ -397,48 +393,35 @@ const claimFreeRewards = async (page) => {
 
 const updateReadme = async (rewards) => {
   const today = new Date();
-  const todaysRewards = `| ${today.toLocaleDateString()} | ${rewards.length > 0 ? rewards.join("; ") : "No rewards found"} |\n`;
+  const todaysRewards = rewards.length > 0 ? rewards.join("; ") : "No rewards found or page changed";
+  const tableRow = `| ${today.toLocaleDateString()} | ${todaysRewards} |\n`;
   
   try {
-    let prevReadmeContent;
+    let prevReadmeContent = "# 8 Ball Pool Free Rewards Tracker\n\n";
+    prevReadmeContent += "| Date | Rewards |\n|------|---------|\n";
+
     if (today.getDate() === 1) {
       const archivedFileName = getArchivedFileName(today);
-      const archiveFilePath = path.join("archive", `${archivedFileName}.md`);
       await fs.mkdir("archive", { recursive: true });
       
       try {
         const currentReadme = await fs.readFile("README.md", "utf8");
-        await fs.writeFile(archiveFilePath, currentReadme);
-        logMessage("info", `🗄️ Archived ${archivedFileName}`);
+        const archivePath = path.join("archive", `${archivedFileName}.md`);
+        await fs.writeFile(archivePath, currentReadme);
+        logMessage("info", `🗄️ Archived to ${archivedFileName}.md`);
       } catch (e) {
         logMessage("warning", "⚠️ Could not archive previous README");
-      }
-      
-      try {
-        prevReadmeContent = await fs.readFile("README.example.md", "utf8");
-      } catch (e) {
-        prevReadmeContent = "# 8 Ball Pool Free Rewards\n\n| Date | Rewards |\n|------|---------|\n";
       }
     } else {
       try {
         prevReadmeContent = await fs.readFile("README.md", "utf8");
       } catch (e) {
-        prevReadmeContent = "# 8 Ball Pool Free Rewards\n\n| Date | Rewards |\n|------|---------|\n";
+        // File doesn't exist, start fresh
       }
     }
 
-    // Asegurar formato de tabla
-    const tableMatch = prevReadmeContent.match(/\| Date \| Rewards \|\n\|------\|---------\\|\n(.*)/s);
-    if (tableMatch) {
-      prevReadmeContent = prevReadmeContent.replace(
-        /\| Date \| Rewards \|\n\|------\|---------\\|\n(.*)/s,
-        `| Date | Rewards |\n|------|---------|\n${todaysRewards}$1`
-      );
-    } else {
-      prevReadmeContent += todaysRewards;
-    }
-
-    await fs.writeFile("README.md", prevReadmeContent);
+    // Append new row
+    await fs.writeFile("README.md", prevReadmeContent + tableRow);
     logMessage("success", `📝 Updated README with ${rewards.length} rewards`);
   } catch (error) {
     logMessage("error", `❌ Failed to update README: ${error.message}`);
@@ -451,11 +434,11 @@ const updateReadme = async (rewards) => {
     logMessage("info", "🚀 Starting 8 Ball Pool Free Rewards Collector...");
     const rewards = await collectRewards();
     await updateReadme(rewards);
-    logMessage("success", `🤖 Script completed successfully! Claimed ${rewards.length} rewards.`);
+    logMessage("success", `🤖 Completed! Found ${rewards.length} rewards.`);
+    process.exit(0);
   } catch (error) {
-    logMessage("error", `💥 Script failed: ${error.message}`);
-    logMessage("info", "💡 Check debug files (debug-*.png/html) for troubleshooting");
+    logMessage("error", `💥 Failed: ${error.message}`);
+    logMessage("info", "💡 Check debug-start.html and debug-start.png for page structure");
     process.exit(1);
   }
-  exit(0);
 })();
