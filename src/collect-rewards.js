@@ -30,7 +30,7 @@ export const collectRewards = async (userUniqueID) => {
   await page.goto(pageUrl, { waitUntil: "networkidle2" });
   logger("debug", `✅ Navigation complete, waiting for login button.`);
 
-  const LOGIN_SELECTOR = 'xpath//html/body/div[1]/div/div[1]/div/div[2]/header/div[3]/div/button[1]';
+  const LOGIN_SELECTOR = 'xpath//html/body/div[1]/div/div[1]/div/div[2]/header/div[2]/div/button[1]';
   logger("debug", `⏳ Waiting for selector: ${LOGIN_SELECTOR} (Timeout: ${TIMEOUT}ms)`);
   
   const loginButton = await page.waitForSelector(
